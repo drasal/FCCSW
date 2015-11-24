@@ -4,6 +4,8 @@
 
 DECLARE_COMPONENT(HepMCConverter)
 
+using namespace fccedm;
+
 HepMCConverter::HepMCConverter(const std::string& name, ISvcLocator* svcLoc):
   GaudiAlgorithm(name, svcLoc)
 {

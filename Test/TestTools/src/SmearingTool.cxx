@@ -10,6 +10,8 @@
 
 DECLARE_COMPONENT(SmearingTool)
 
+using namespace fccedm;
+
 SmearingTool::SmearingTool(const std::string& type, const std::string& name, const IInterface* parent) :
 AlgTool(type,name,parent)
 {

@@ -28,7 +28,7 @@ public:
     
 private:
   
-    DataHandle<ParticleCollection>          m_particles;
+    DataHandle<fccedm::ParticleCollection>  m_particles;
     IToolSvc*                               m_toolsvc;
     IDigitizer*                             m_smeartool;
     

@@ -90,8 +90,8 @@ private:
     mutable std::ofstream                           m_modules;
     mutable std::ofstream                           m_sens;
 //    TrackHitCollection*                             m_hitcoll;
-    DataHandle<ParticleCollection>                  m_particles;
-    ParticleCollection*                             m_particlecoll;
+    DataHandle<fccedm::ParticleCollection>          m_particles;
+    fccedm::ParticleCollection*                     m_particlecoll;
     IToolSvc*                                       m_toolsvc;
     IPrintHits*                                     m_printhits;
     mutable double                                  m_tInX0;

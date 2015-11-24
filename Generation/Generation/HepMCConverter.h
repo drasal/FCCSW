@@ -22,7 +22,7 @@ private:
   /// Handle for the HepMC to be read
   DataHandle<HepMC::GenEvent> m_hepmchandle;
   /// Handle for the genparticles to be written
-  DataHandle<MCParticleCollection> m_genphandle;
+  DataHandle<fccedm::MCParticleCollection> m_genphandle;
 };
 
 #endif

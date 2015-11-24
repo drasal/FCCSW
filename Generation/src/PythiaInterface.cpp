@@ -111,8 +111,14 @@ StatusCode PythiaInterface::execute() {
               << " Py: "       << setw(10) << (*ipart)->momentum().py()
               << " Pz: "       << setw(10) << (*ipart)->momentum().pz()
               << " E: "        << setw(10) << (*ipart)->momentum().e()
-              << " M: "        << setw(10) << (*ipart)->momentum().m()
-              << std::endl;
+              << " M: "        << setw(10) << (*ipart)->momentum().m();
+    if ((*ipart)->production_vertex()!=nullptr) {
+    std::cout << " Vx: "       << setw(10) << (*ipart)->production_vertex()->position().x()
+              << " Vy: "       << setw(10) << (*ipart)->production_vertex()->position().y()
+              << " Vz: "       << setw(10) << (*ipart)->production_vertex()->position().z()
+              << " T: "        << setw(10) << (*ipart)->production_vertex()->position().t();
+    }
+    std::cout << std::endl;
   }*/
 
   // Handle event via standard Gaudi mechanism

@@ -24,9 +24,9 @@ public:
 private:
 
   /// Handle for the MCParticleCollection to be read
-  DataHandle<MCParticleCollection> m_genphandle;
+  DataHandle<fccedm::MCParticleCollection> m_genphandle;
   /// Handle for the "reconstructed" to be written
-  DataHandle<ParticleCollection> m_recphandle;
+  DataHandle<fccedm::ParticleCollection> m_recphandle;
 
 };
 

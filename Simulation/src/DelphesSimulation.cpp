@@ -1,5 +1,8 @@
 #include "DelphesSimulation.h"
 
+#include <limits>
+#include <ParticleStatus.h>
+
 using namespace std;
 
 DECLARE_COMPONENT(DelphesSimulation)
@@ -7,7 +10,6 @@ DECLARE_COMPONENT(DelphesSimulation)
 DelphesSimulation::DelphesSimulation(const std::string& name, ISvcLocator* svcLoc):
 GaudiAlgorithm(name, svcLoc) ,
   m_DelphesCard(),
-  m_outCollections(),
   m_Delphes(nullptr),
   m_DelphesFactory(nullptr),
   m_HepMCReader(nullptr),
@@ -22,21 +24,25 @@ GaudiAlgorithm(name, svcLoc) ,
  {
    //declareProperty("filename", m_filename="" , "Name of the HepMC file to read");
    declareProperty("DelphesCard"      , m_DelphesCard    , "Name of Delphes tcl config file with detector and simulation parameters");
-   declareProperty("OutputCollections", m_outCollections , "Names of ouput collections, written out by Delphes: muons, electrons, photons, jets, mets, hts");
    declareProperty("HepMCInputFile"   , m_inHepMCFileName, "Name of HepMC input file, if defined file read in / if not data read in directly from the transient data store");
    declareProperty("ROOTOutputFile"   , m_outRootFileName, "Name of Root output file, if defined file write out / if not data written to the transient data store");
 
    declareInput("hepmc", m_hepmcHandle);
    
-   declareOutput("allParticles"      , m_allPartclsHandle);
-   declareOutput("genPartons"        , m_genPartonsHandle);
-   declareOutput("genStableParticles", m_genStablesHandle);
-   declareOutput("recMuons"          , m_recMuonHandle);
-   declareOutput("recElectrons"      , m_recElecHandle);
-   declareOutput("recPhotons"        , m_recPhotHandle);
-   declareOutput("recJets"           , m_recJetsHandle);
-   declareOutput("recMETs"           , m_recMETHandle);
-   declareOutput("recHTs"            , m_recHTSHandle);
+   declareOutput("genParticles"      , m_handleGenParticles);
+   declareOutput("genProdVertices"   , m_handleGenProdVertices);
+   declareOutput("genDecVertices"    , m_handleGenDecVertices);
+   declareOutput("recMuons"          , m_handleRecMuons);
+   declareOutput("recElectrons"      , m_handleRecElectrons);
+   declareOutput("recPhotons"        , m_handleRecPhotons);
+   declareOutput("recJets"           , m_handleRecJets);
+
+   declareOutput("recMuonsToMC"      , m_handleRecMuonsToMC);
+   declareOutput("recElectronsToMC"  , m_handleRecElectronsToMC);
+   declareOutput("recPhotonsToMC"    , m_handleRecPhotonsToMC);
+   declareOutput("recJetsToPart"     , m_handleRecJetsToPart);
+   /*declareOutput("recMETs"           , m_recMETHandle);
+   declareOutput("recHTs"            , m_recHTSHandle);*/
 
    m_stablePartOutArray = nullptr;
    m_allPartOutArray    = nullptr;
@@ -168,10 +174,10 @@ StatusCode DelphesSimulation::execute() {
     // Print HepMC event info
     /*for(auto ipart=hepMCEvent->particles_begin(); ipart!=hepMCEvent->particles_end(); ++ipart) {
 
-      int motherID                = -1;
-      int motherIDRange           = 0;
-      int daughterID              = -1;
-      int daughterIDRange         = 0;
+      int motherID        = -1;
+      int motherIDRange   = 0;
+      int daughterID      = -1;
+      int daughterIDRange = 0;
       if ((*ipart)->production_vertex()!=nullptr) {
 
         motherID      = (*((*ipart)->production_vertex()->particles_in_const_begin()))->barcode();//(*((*ipart)->production_vertex()->particles_begin()))->barcode();
@@ -194,10 +200,11 @@ StatusCode DelphesSimulation::execute() {
                 << " Pz: "       << setw(10) << (*ipart)->momentum().pz()
                 << " E: "        << setw(10) << (*ipart)->momentum().e()
                 << " M: "        << setw(10) << (*ipart)->momentum().m();
-      if ((*ipart)->production_vertex()) {
+      if ((*ipart)->production_vertex()!=nullptr) {
       std::cout << " Vx: "       << setw(10) << (*ipart)->production_vertex()->position().x()
                 << " Vy: "       << setw(10) << (*ipart)->production_vertex()->position().y()
-                << " Vz: "       << setw(10) << (*ipart)->production_vertex()->position().z();
+                << " Vz: "       << setw(10) << (*ipart)->production_vertex()->position().z()
+                << " T: "        << setw(10) << (*ipart)->production_vertex()->position().t();
       }
       std::cout << std::endl;
     }*/
@@ -206,7 +213,7 @@ StatusCode DelphesSimulation::execute() {
   if (!isEventReady) return StatusCode::FAILURE;
 
   // Print Delphes event info
-  /*for (auto i=0; i<m_allPartOutArray->GetEntries(); i++) {
+  for (auto i=0; i<m_allPartOutArray->GetEntries(); i++) {
 
     Candidate *candidate = static_cast<Candidate *>(m_allPartOutArray->At(i));
 
@@ -224,8 +231,9 @@ StatusCode DelphesSimulation::execute() {
               << " Vx: "       << setw(10) << candidate->Position.X()
               << " Vy: "       << setw(10) << candidate->Position.Y()
               << " Vz: "       << setw(10) << candidate->Position.Z()
+              << " T: "        << setw(10) << candidate->Position.T()
               << std::endl;
-  }*/
+  }
 
   m_eventCounter++;
   readStopWatch.Stop();
@@ -244,77 +252,46 @@ StatusCode DelphesSimulation::execute() {
   if (m_outRootFile!=nullptr) m_treeWriter->Fill();
 
   // FCC EDM (event-data model) based output
-  /*ParticleCollection* allParticles       = new ParticleCollection();
-  ParticleCollection* genPartons         = new ParticleCollection();
-  ParticleCollection* genStableParticles = new ParticleCollection();
-  ParticleCollection* recMuons           = nullptr;
-  ParticleCollection* recElectrons       = nullptr;
-  ParticleCollection* recPhotons         = nullptr;
-  GenJetCollection*   recJets            = nullptr;
-  ParticleCollection* recMETs            = nullptr;
-  ParticleCollection* recHTs             = nullptr;
-  for ( unsigned int l=0; l<m_outCollections.size() ; l++){
-    if ( m_outCollections[l].find("muons")     != std::string::npos ) recMuons     = new ParticleCollection();
-    if ( m_outCollections[l].find("electrons") != std::string::npos ) recElectrons = new ParticleCollection();
-    if ( m_outCollections[l].find("photons")   != std::string::npos ) recPhotons   = new ParticleCollection();
-    if ( m_outCollections[l].find("jets")      != std::string::npos ) recJets      = new GenJetCollection();
-    if ( m_outCollections[l].find("mets")      != std::string::npos ) recMETs      = new ParticleCollection();
-    if ( m_outCollections[l].find("hts")       != std::string::npos ) recHTs       = new ParticleCollection();
-  }
+  fccedm::MCParticleCollection* genParticles     = new fccedm::MCParticleCollection();
+  fccedm::GenVertexCollection*  genProdVertices  = new fccedm::GenVertexCollection();
+  fccedm::GenVertexCollection*  genDecVertices   = new fccedm::GenVertexCollection();
+  fccedm::ParticleCollection*   recMuons         = new fccedm::ParticleCollection();
+  fccedm::ParticleCollection*   recElectrons     = new fccedm::ParticleCollection();
+  fccedm::ParticleCollection*   recPhotons       = new fccedm::ParticleCollection();
+  fccedm::JetCollection*        recJets          = new fccedm::JetCollection();
 
-  // Generated FCC output: collections
-  DelphesSimulation::ConvertParticle( m_allPartOutArray   , allParticles      );
-  DelphesSimulation::ConvertParticle( m_stablePartOutArray, genStableParticles);
-  DelphesSimulation::ConvertParticle( m_partonOutArray    , genPartons        );
+  fccedm::ParticleMCAssociationCollection*  recMuonsToMC     = new fccedm::ParticleMCAssociationCollection();
+  fccedm::ParticleMCAssociationCollection*  recElectronsToMC = new fccedm::ParticleMCAssociationCollection();
+  fccedm::ParticleMCAssociationCollection*  recPhotonsToMC   = new fccedm::ParticleMCAssociationCollection();
+  fccedm::JetParticleAssociationCollection* recJetsToPart    = nullptr; //new fccedm::JetParticleAssociationCollection();
+  //ParticleCollection* recMETs            = nullptr;
+  //ParticleCollection* recHTs             = nullptr;
 
-  // Reconstructed objects from Delphes
-  const char* name;
-  for ( unsigned int l=0; l<m_outCollections.size() ; l++) {
+  // Fill FCC collections
+  m_muonOutArray     = m_Delphes->ImportArray("MuonMomentumSmearing/muons");
+  m_electronOutArray = m_Delphes->ImportArray("ElectronEnergySmearing/electrons");
+  m_photonOutArray   = m_Delphes->ImportArray("Ecal/eflowPhotons");
+  m_jetOutArray      = m_Delphes->ImportArray("JetEnergyScale/jets");
 
-    if ( m_outCollections[l].find("muons")!= std::string::npos ) {
-      name = m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_muonOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertParticle( m_muonOutArray, recMuons );
-    }
-    if ( m_outCollections[l].find("electrons")!= std::string::npos ) {
-      name = m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_electronOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertParticle( m_electronOutArray, recElectrons );
-    }
-    if ( m_outCollections[l].find("photons")!= std::string::npos ) {
-      name = m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_photonOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertParticle( m_photonOutArray, recPhotons );
-    }
-    if ( m_outCollections[l].find("jets")!= std::string::npos ) {
-      name = m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_jetOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertJet( m_jetOutArray, recJets );
-    }
-    if ( m_outCollections[l].find("MissingET")!= std::string::npos ) {
-      name = m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_metOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertMET( m_metOutArray, recMETs );
-    }
-    if ( m_outCollections[l].find("ScalarHT")!= std::string::npos ) {
-      name =  m_Delphes->GetString("Branch",m_outCollections[l].c_str() ) ;
-      m_htOutArray = m_Delphes->ImportArray(name);
-      DelphesSimulation::ConvertParticle( m_htOutArray, recHTs );
-    }
-  }
+  DelphesSimulation::ConvertMCParticles(          m_allPartOutArray , genParticles, genProdVertices, genDecVertices);
+  DelphesSimulation::ConvertParticles<Muon>(      m_muonOutArray    , recMuons    , genParticles, recMuonsToMC    );
+  DelphesSimulation::ConvertParticles<Electron>(  m_electronOutArray, recElectrons, genParticles, recElectronsToMC);
+  DelphesSimulation::ConvertPhotons(              m_photonOutArray  , recPhotons  , genParticles, recPhotonsToMC  );
+  DelphesSimulation::ConvertJets(                 m_jetOutArray     , recJets);
 
-  // Save particle collections to FCCSw data store
-  m_allPartclsHandle.put(allParticles      );
-  m_genPartonsHandle.put(genPartons        );
-  m_genStablesHandle.put(genStableParticles);
-  for ( unsigned int l=0; l<m_outCollections.size() ; l++){
-    if ( m_outCollections[l].find("muons")    != std::string::npos ) m_recMuonHandle.put(recMuons);
-    if ( m_outCollections[l].find("electrons")!= std::string::npos ) m_recElecHandle.put(recElectrons);
-    if ( m_outCollections[l].find("photons")  != std::string::npos ) m_recPhotHandle.put(recPhotons);
-    if ( m_outCollections[l].find("jets")     != std::string::npos ) m_recJetsHandle.put(recJets);
-    if ( m_outCollections[l].find("mets")     != std::string::npos ) m_recMETHandle.put(recMETs);
-    if ( m_outCollections[l].find("hts")      != std::string::npos ) m_recHTSHandle.put(recHTs);
-  }*/
+  // Save FCC-EDM collections to FCCSw data store
+  m_handleGenParticles.put(genParticles);
+  m_handleGenProdVertices.put(genProdVertices);
+  m_handleGenDecVertices.put(genDecVertices);
+
+  m_handleRecMuons.put(recMuons);
+  //m_handleRecMuonsToMC.put(recMuonsToMC);
+  m_handleRecElectrons.put(recElectrons);
+  //m_handleRecElectronsToMC.put(recElectronsToMC);
+  m_handleRecPhotons.put(recPhotons);
+  //m_handleRecPhotonsToMC.put(recPhotonsToMC);
+  m_handleRecJets.put(recJets);
+  //m_handleRecJetsToPart.put(recJetsToPart);
 
   // Initialize for next event reading (Will also zero Delphes arrays)
   if (m_outRootFile!=nullptr) m_treeWriter->Clear();
@@ -354,46 +331,239 @@ StatusCode DelphesSimulation::finalize() {
   return GaudiAlgorithm::finalize();
 }
 
-void DelphesSimulation::ConvertParticle(   TObjArray *  Input , ParticleCollection *  coll  ){
-
-  Candidate * cand;
-  for(int j = 0; j < Input->GetEntries(); ++j) {
+void DelphesSimulation::ConvertMCParticles(const TObjArray* Input , fccedm::MCParticleCollection* colMCParticles, fccedm::GenVertexCollection* colProdVertices, fccedm::GenVertexCollection* colDecVertices)
+{
+  Candidate* cand = nullptr;
+  for(int j=0; j<Input->GetEntries(); j++) {
 
     cand = static_cast<Candidate *>(Input->At(j));
-    ParticleHandle outptc = coll->create();
-    BareParticle&  core   = outptc.mod().Core;
-    if (cand->Momentum.Pt()!=0) { // protection against the boring message Warning in <TVector3::PseudoRapidity>: transvers momentum = 0! return +/- 10e10
 
-      core.Type     = cand->PID;
-	    core.Status   = cand->Status;
-    	core.P4.Px    = (double) cand->Momentum.X();
-	    core.P4.Py    = (double) cand->Momentum.Y();
-	    core.P4.Pz    = (double) cand->Momentum.Z();
-	    core.P4.Mass  = (double) cand->Mass ;
-	    core.Vertex.X = (double) cand->Position.X() ;
-	    core.Vertex.Y = (double) cand->Position.Y() ;
-	    core.Vertex.Z = (double) cand->Position.Z() ;
+    fccedm::MCParticleHandle particleHandle   = colMCParticles->create();
+    fccedm::GenVertexHandle  prodVertexHandle = colProdVertices->create();
+    fccedm::GenVertexHandle  decVertexHandle  = colDecVertices->create();
+
+    auto particle    = particleHandle.mod().Core;
+    auto prodVertex  = prodVertexHandle.mod();
+    auto decayVertex = decVertexHandle.mod();
+
+    particleHandle.mod().StartVertex = prodVertexHandle;
+    particleHandle.mod().EndVertex   = decVertexHandle;
+
+    particle.Type     = cand->PID;
+    particle.Status   = cand->Status;
+  	particle.P4.Px    = cand->Momentum.X();
+    particle.P4.Py    = cand->Momentum.Y();
+    particle.P4.Pz    = cand->Momentum.Z();
+    particle.P4.Mass  = cand->Mass;
+    particle.Charge   = cand->Charge;
+    particle.Vertex.X = cand->Position.X();
+    particle.Vertex.Y = cand->Position.Y();
+    particle.Vertex.Z = cand->Position.Z();
+
+    prodVertex.Position.X = cand->Position.X();
+    prodVertex.Position.Y = cand->Position.Y();
+    prodVertex.Position.Z = cand->Position.Z();
+    prodVertex.Ctau       = cand->Position.T();
+
+    // Colliding particle
+    if (cand->M1==-1) {
+
+      particle.Bits       = ParticleStatus::Beam;
+      Candidate* daughter = nullptr;
+      if (cand->D1!=-1) {
+
+        daughter = static_cast<Candidate *>(Input->At(cand->D1));
+        decayVertex.Position.X = daughter->Position.X();
+        decayVertex.Position.Y = daughter->Position.Y();
+        decayVertex.Position.Z = daughter->Position.Z();
+        decayVertex.Ctau       = daughter->Position.T();
+      }
+      else {
+
+        particle.Bits = ParticleStatus::Stable;
+        decayVertex.Position.X = -std::numeric_limits<float>::max();
+        decayVertex.Position.Y = -std::numeric_limits<float>::max();
+        decayVertex.Position.Z = -std::numeric_limits<float>::max();
+        decayVertex.Ctau       = -std::numeric_limits<float>::max();
+      }
+    }
+    // Stable particle
+    else if (cand->D1==-1) {
+
+      particle.Bits = ParticleStatus::Stable;
+      decayVertex.Position.X = -std::numeric_limits<float>::max();
+      decayVertex.Position.Y = -std::numeric_limits<float>::max();
+      decayVertex.Position.Z = -std::numeric_limits<float>::max();
+      decayVertex.Ctau       = -std::numeric_limits<float>::max();
+    }
+    // Intermediate state particle
+    else {
+
+      particle.Bits = ParticleStatus::Decayed;
+      Candidate* daughter = static_cast<Candidate *>(Input->At(cand->D1));
+      decayVertex.Position.X = daughter->Position.X();
+      decayVertex.Position.Y = daughter->Position.Y();
+      decayVertex.Position.Z = daughter->Position.Z();
+      decayVertex.Ctau       = daughter->Position.T();
+    }
+
+    /*std::cout << "Delphes FCCEDM: "
+              << " Id: "       << setw(3)  << j
+              << " Pdg: "      << setw(5)  << particle.Type
+              << " Stat: "     << setw(2)  << particle.Status
+              << " Px: "       << setw(10) << particle.P4.Px
+              << " Py: "       << setw(10) << particle.P4.Py
+              << " Pz: "       << setw(10) << particle.P4.Pz
+              << " E: "        << setw(10) << sqrt(particle.P4.Px*particle.P4.Px + particle.P4.Py*particle.P4.Py + particle.P4.Pz*particle.P4.Pz + particle.P4.Mass*particle.P4.Mass)
+              << " M: "        << setw(10) << particle.P4.Mass;
+    std::cout << " Vx: "       << setw(10) << prodVertex.Position.X
+              << " Vy: "       << setw(10) << prodVertex.Position.Y
+              << " Vz: "       << setw(10) << prodVertex.Position.Z
+              << " T: "        << setw(10) << prodVertex.Ctau;
+    std::cout << std::endl;*/
+  }
+}   
+
+template <class T> void DelphesSimulation::ConvertParticles(const TObjArray*  Input, fccedm::ParticleCollection* colParticles, fccedm::MCParticleCollection* colMCParticles, fccedm::ParticleMCAssociationCollection* ascColParticlesToMC)
+{
+  T* part = nullptr;
+  for(int j=0; j<Input->GetEntries(); j++) {
+
+    part = (T *)(Input->At(j));
+
+    fccedm::ParticleHandle               particleHandle = colParticles->create();
+    fccedm::ParticleMCAssociationHandle  relationHandle = ascColParticlesToMC->create();
+
+    auto particle = particleHandle.mod().Core;
+    auto relation = relationHandle.mod();
+
+    particle.Charge   = part->Charge;
+    particle.Status   = -1;
+    particle.Type     = -1;
+    particle.P4.Mass  = part->P4().M();
+    particle.P4.Px    = part->P4().Px();
+    particle.P4.Py    = part->P4().Py();
+    particle.P4.Pz    = part->P4().Pz();
+    particle.Vertex.X = -1;
+    particle.Vertex.Y = -1;
+    particle.Vertex.Z = -1;
+
+    // Reference to MC - Delphes holds references to all objects related to the <T> object, only one relates to MC particle
+    TObjArray* refParticles  = ((Candidate *)(Input->At(j)))->GetCandidates();
+    int        nRefParticles = 0;
+    int        indexMCPart   = -1;
+    int        nMCParticles  = colMCParticles->getHandles().size();
+    for(int k=0; k<refParticles->GetEntries(); k++) {
+
+      int index = refParticles->At(k)->GetUniqueID()-1; // To start with zero value
+      if (index<nMCParticles) {
+
+        indexMCPart = index;
+        nRefParticles++;
+      }
+    }
+
+    if (nRefParticles!=1) {
+
+      particle.Bits = ParticleStatus::Unmatched;
+      std::cout << "WARNING: Can't build relation to MC particle!" << std::endl;
+    }
+    else {
+
+      //std::cout << ">> Index reference: " << indexMCPart+1 << std::endl;
+      relation.Rec = particleHandle;
+      //relation.Sim = colMCParticles->get(indexMCPart);
     }
   }
-}   
+}
 
-void DelphesSimulation::ConvertJet(   TObjArray *  Input , GenJetCollection *  coll  ){
+void DelphesSimulation::ConvertPhotons(const TObjArray*  Input, fccedm::ParticleCollection* colParticles, fccedm::MCParticleCollection* colMCParticles, fccedm::ParticleMCAssociationCollection* ascColParticlesToMC)
+{
+  Photon* part = nullptr;
+  for(int j=0; j<Input->GetEntries(); j++) {
 
-  Candidate * cand;
+    part = static_cast<Photon *>(Input->At(j));
+
+    fccedm::ParticleHandle               particleHandle = colParticles->create();
+    fccedm::ParticleMCAssociationHandle  relationHandle = ascColParticlesToMC->create();
+
+    auto particle = particleHandle.mod().Core;
+    auto relation = relationHandle.mod();
+
+    particle.Charge   =  0;
+    particle.Status   = -1;
+    particle.Type     = -1;
+    particle.P4.Mass  = part->P4().M();
+    particle.P4.Px    = part->P4().Px();
+    particle.P4.Py    = part->P4().Py();
+    particle.P4.Pz    = part->P4().Pz();
+    particle.Vertex.X = -1;
+    particle.Vertex.Y = -1;
+    particle.Vertex.Z = -1;
+
+    // Reference to MC - Delphes holds references to all objects related to the Photon object, only one relates to MC particle
+    // (relation can be a cascade of photons, only the mother of the cascade relates to the MC particle)
+    TObjArray* refParticles   = ((Candidate *)(Input->At(j)))->GetCandidates();
+    int        nRefParticles  = 0;
+    int        indexMCPart    = -1;
+    int        nMCParticles   = colMCParticles->getHandles().size();
+    int        nRefInCascade  = 0;
+    for(int k=0; k<refParticles->GetEntries(); k++) {
+
+      int index = refParticles->At(k)->GetUniqueID()-1; // To start with zero value
+      if (index<nMCParticles) {
+
+        indexMCPart = index;
+        nRefParticles++;
+      }
+      else {
+        TObjArray* ref2Particles = ((Candidate *)(refParticles->At(k)))->GetCandidates();
+        for(int l=0; l<ref2Particles->GetEntries(); l++) {
+
+          int index = ref2Particles->At(l)->GetUniqueID()-1; //
+          if (index<nMCParticles) {
+
+            indexMCPart = index;
+            nRefInCascade++;
+          }
+        }
+      }
+    }
+
+    if ((nRefParticles+nRefInCascade)!=1) {
+
+      particle.Bits = ParticleStatus::Unmatched;
+      std::cout << "WARNING: Can't build relation to MC particle!" << std::endl;
+    }
+    else {
+
+      //std::cout << ">> Index reference: " << indexMCPart+1 << std::endl;
+      relation.Rec = particleHandle;
+      if (nRefInCascade!=0) particle.Bits = ParticleStatus::MatchInCascade;
+      //relation.Sim = colMCParticles->get(indexMCPart);
+    }
+  }
+}
+
+void DelphesSimulation::ConvertJets(const TObjArray*  Input, fccedm::JetCollection* colJets)
+{
+  Jet* jet;
   for(int j = 0; j < Input->GetEntries(); ++j) {
       
-    cand = static_cast<Candidate *>(Input->At(j));
-    GenJetHandle outptc = coll->create();
-    BareJet& core = outptc.mod().Core;
-    core.Area     = cand->Area.Mag();
-    core.P4.Px    = (double) cand->Momentum.X();
-    core.P4.Py    = (double) cand->Momentum.Y();
-    core.P4.Pz    = (double) cand->Momentum.Z();
-    core.P4.Mass  = (double) cand->Mass ;
+    jet = static_cast<Jet *>(Input->At(j));
+
+    fccedm::JetHandle jetHandle = colJets->create();
+
+    fccedm::BareJet& core = jetHandle.mod().Core;
+    core.Area     = 0;
+    core.P4.Px    = (double) jet->P4().X();
+    core.P4.Py    = (double) jet->P4().Y();
+    core.P4.Pz    = (double) jet->P4().Z();
+    core.P4.Mass  = (double) jet->Mass ;
   }
 }   
 
-void DelphesSimulation::ConvertMET(   TObjArray *  Input , ParticleCollection *  coll  ){
+/*void DelphesSimulation::ConvertMET(   TObjArray *  Input , ParticleCollection *  coll  ){
 
   Candidate * cand;
   for(int j = 0; j < Input->GetEntries(); ++j) {
@@ -417,4 +587,4 @@ void DelphesSimulation::ConvertHT(   TObjArray *  Input , ParticleCollection *  
     core.P4.Px         = (double) cand->Momentum.X();
     core.P4.Py         = (double) cand->Momentum.Y();
   }
-}
+}*/

@@ -4,6 +4,8 @@
 
 DECLARE_COMPONENT(GenParticleFilter)
 
+using namespace fccedm;
+
 GenParticleFilter::GenParticleFilter(const std::string& name, ISvcLocator* svcLoc):
   GaudiAlgorithm(name, svcLoc)
 {

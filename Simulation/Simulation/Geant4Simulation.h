@@ -30,7 +30,7 @@ private:
   /// Handle for the HepMC to be read
   DataHandle<HepMC::GenEvent> m_eventhandle;
   /// Handle for the "reconstructed" to be written
-  DataHandle<ParticleCollection> m_recphandle;
+  DataHandle<fccedm::ParticleCollection> m_recphandle;
 
   G4RunManager* m_runManager;
 

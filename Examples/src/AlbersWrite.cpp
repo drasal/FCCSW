@@ -3,6 +3,8 @@
 
 DECLARE_COMPONENT(AlbersWrite)
 
+using namespace fccedm;
+
 AlbersWrite::AlbersWrite(const std::string& name, ISvcLocator* svcLoc) :
 		GaudiAlgorithm(name, svcLoc)
 

@@ -10,6 +10,8 @@
 
 DECLARE_COMPONENT(GaussDigitizer)
 
+using namespace fccedm;
+
 GaussDigitizer::GaussDigitizer(const std::string& type, const std::string& name, const IInterface* parent) :
 AlgTool(type,name,parent)
 {}

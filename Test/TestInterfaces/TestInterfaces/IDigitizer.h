@@ -11,7 +11,9 @@
 
 #include "GaudiKernel/IAlgTool.h"
 
-class ParticleCollection;
+namespace fccedm {
+  class ParticleCollection;
+}
 
 static const InterfaceID IID_IDigitizer ("IDigitizer", 1, 0);
 
@@ -22,7 +24,7 @@ public:
             return IID_IDigitizer;
     }
     
-    virtual StatusCode smear(ParticleCollection* particlecoll) = 0;
+    virtual StatusCode smear(fccedm::ParticleCollection* particlecoll) = 0;
     
 protected:
     ~IDigitizer() {}

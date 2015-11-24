@@ -3,6 +3,8 @@
 
 DECLARE_COMPONENT(DummySimulation)
 
+using namespace fccedm;
+
 DummySimulation::DummySimulation(const std::string& name, ISvcLocator* svcLoc):
   GaudiAlgorithm(name, svcLoc) {
   declareInput("genparticles", m_genphandle);

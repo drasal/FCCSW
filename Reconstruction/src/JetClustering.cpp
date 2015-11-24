@@ -17,8 +17,8 @@
 #include "datamodel/JetParticleAssociationCollection.h"
 #include "datamodel/GenJetParticleAssociationCollection.h"
 
-typedef JetClustering<ParticleCollection, JetCollection, JetParticleAssociationCollection> ParticleJetClustering;
-typedef JetClustering<MCParticleCollection, GenJetCollection, GenJetParticleAssociationCollection> MCParticleGenJetClustering;
+typedef JetClustering<fccedm::ParticleCollection, fccedm::JetCollection, fccedm::JetParticleAssociationCollection> ParticleJetClustering;
+typedef JetClustering<fccedm::MCParticleCollection, fccedm::GenJetCollection, fccedm::GenJetParticleAssociationCollection> MCParticleGenJetClustering;
 
 DECLARE_COMPONENT(ParticleJetClustering)
 DECLARE_COMPONENT_WITH_ID(ParticleJetClustering,"ParticleJetClustering")

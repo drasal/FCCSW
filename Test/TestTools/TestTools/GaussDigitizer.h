@@ -30,7 +30,7 @@ public:
     ~GaussDigitizer() {}
     virtual StatusCode initialize();
     virtual StatusCode finalize();
-    virtual StatusCode smear(ParticleCollection* particlecoll) override;
+    virtual StatusCode smear(fccedm::ParticleCollection* particlecoll) override;
     
 private:
     
