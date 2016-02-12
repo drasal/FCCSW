@@ -7,9 +7,10 @@
 // HepMC
 #include "HepMC/GenEvent.h"
 
-// STL
+// STL & System
 #include <iostream>
 #include <sstream>
+#include <memory>
 
 // Forward Delphes
 class Delphes;
@@ -78,9 +79,8 @@ private:
   std::string            m_DelphesCard; //!< Name of Delphes tcl config file with detector and simulation parameters
 
   // Delphes
-  Delphes               *m_Delphes ;
-  DelphesFactory        *m_DelphesFactory ;
-  DelphesExtHepMCReader *m_HepMCReader ;
+  std::unique_ptr<Delphes>               m_Delphes;
+  std::unique_ptr<DelphesExtHepMCReader> m_HepMCReader;
 
   // Names of Delphes output arrays -> needed to correctly write out the Delphes objects into FCC-EDM
   std::string m_DelphesMuonsArrayName;      //!< Delphes muon output array: moduleName/muons
@@ -162,11 +162,11 @@ private:
   int m_eventCounter;
 
   // Delphes ROOT output
-  TFile            *m_outRootFile;
-  std::string       m_outRootFileName; //!< Name of Delphes Root output file, if defined, the Delphes standard tree write out in addition to FCC output
-  ExRootTreeWriter *m_treeWriter;
-  ExRootTreeBranch *m_branchEvent;
-  ExRootConfReader *m_confReader;
+  TFile*                            m_outRootFile;
+  std::string                       m_outRootFileName; //!< Name of Delphes Root output file, if defined, the Delphes standard tree write out in addition to FCC output
+  ExRootTreeWriter*                 m_treeWriter;
+  ExRootTreeBranch*                 m_branchEvent;
+  std::unique_ptr<ExRootConfReader> m_confReader;
 
   // Internal Delphes object arrays
   TObjArray *m_stablePartOutArray,

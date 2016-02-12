@@ -37,7 +37,6 @@ DelphesSimulation::DelphesSimulation(const std::string& name, ISvcLocator* svcLo
 GaudiAlgorithm(name, svcLoc) ,
   m_DelphesCard(),
   m_Delphes(nullptr),
-  m_DelphesFactory(nullptr),
   m_HepMCReader(nullptr),
   m_inHepMCFile(nullptr),
   m_inHepMCFileName(""),
@@ -136,25 +135,22 @@ StatusCode DelphesSimulation::initialize() {
   }
 
   // Read Delphes configuration card (deleted by finalize())
-  m_confReader = new ExRootConfReader;
+  m_confReader = std::unique_ptr<ExRootConfReader>(new ExRootConfReader);
   m_confReader->ReadFile(m_DelphesCard.c_str());
    
   // Instance of Delphes (deleted by finalize())
-  m_Delphes = new Delphes("Delphes");
-  m_Delphes->SetConfReader(m_confReader);
-
-  // Get standard Delphes factory (deleted by finalize())
-  m_DelphesFactory = m_Delphes->GetFactory();
+  m_Delphes = std::unique_ptr<Delphes>(new Delphes("Delphes"));
+  m_Delphes->SetConfReader(m_confReader.get());
 
   // Delphes needs data structure to be defined (ROOT tree) (deleted by finalize())
-  m_treeWriter  = new ExRootTreeWriter( m_outRootFile , "DelphesSim");
+  m_treeWriter  = new ExRootTreeWriter( m_outRootFile, "DelphesSim");
   m_branchEvent = m_treeWriter->NewBranch("Event", HepMCEvent::Class());
   m_Delphes->SetTreeWriter(m_treeWriter);
 
   // Define event readers
   //
   //  HepMC reader --> reads either from a file or directly from data store (deleted by finalize())
-  m_HepMCReader = new DelphesExtHepMCReader;
+  m_HepMCReader = std::unique_ptr<DelphesExtHepMCReader>(new DelphesExtHepMCReader);
   if (m_inHepMCFile) m_HepMCReader->SetInputFile(m_inHepMCFile);
   
   // Create following arrays of Delphes objects --> starting objects
@@ -214,13 +210,13 @@ StatusCode DelphesSimulation::execute() {
     }
 
     // Read event - read line-by-line until event complete
-    isEventReady = m_HepMCReader->ReadEventFromFile(m_DelphesFactory, m_allPartOutArray, m_stablePartOutArray, m_partonOutArray);
+    isEventReady = m_HepMCReader->ReadEventFromFile(m_Delphes->GetFactory(), m_allPartOutArray, m_stablePartOutArray, m_partonOutArray);
   }
   else {
 
     // Read event
     const HepMC::GenEvent *hepMCEvent = m_hepmcHandle.get();
-    isEventReady = m_HepMCReader->ReadEventFromStore(hepMCEvent, m_DelphesFactory, m_allPartOutArray, m_stablePartOutArray, m_partonOutArray);
+    isEventReady = m_HepMCReader->ReadEventFromStore(hepMCEvent, m_Delphes->GetFactory(), m_allPartOutArray, m_stablePartOutArray, m_partonOutArray);
 
     // Print debug: HepMC event info
     if (msgLevel() <= MSG::DEBUG) {
@@ -424,15 +420,16 @@ StatusCode DelphesSimulation::finalize() {
 
     m_treeWriter->Write();
     m_outRootFile->Close();
-    if (m_outRootFile!=nullptr) {delete m_outRootFile; m_outRootFile = nullptr;}
+
+    if (m_outRootFile!=nullptr) {delete m_outRootFile; m_outRootFile=nullptr;}
   }
   
   info() << "Exiting Delphes..." << endmsg;
   
   // Clear memory
-  if (m_HepMCReader!=nullptr) {delete m_HepMCReader; m_HepMCReader = nullptr; } // Releases also the memory allocated by inHepMCFile
-  if (m_Delphes    !=nullptr) {delete m_Delphes;     m_Delphes     = nullptr; } // Releases also the memory allocated by treeWriter
-  if (m_confReader !=nullptr) {delete m_confReader;  m_confReader  = nullptr; }
+  if (m_HepMCReader.get()!=nullptr) m_HepMCReader.reset(); // Releases also the memory allocated by inHepMCFile
+  if (m_Delphes.get()    !=nullptr) m_Delphes.reset();     // Releases also the memory allocated by treeWriter
+  if (m_confReader.get() !=nullptr) m_confReader.reset();
   
   return GaudiAlgorithm::finalize();
 }
