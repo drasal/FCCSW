@@ -4,7 +4,7 @@
 gaudi_subdir(SimG4Components v1r0)
 
 # this declaration will not be needed in the future
-gaudi_depends_on_subdirs(GaudiAlg FWCore Sim/SimG4Common DetectorDescription/DetDesInterfaces Sim/SimG4Interface)
+gaudi_depends_on_subdirs(GaudiAlg FWCore Sim/SimG4Common Detector/DetInterface Sim/SimG4Interface)
 
 find_package(Geant4)
 include(${Geant4_USE_FILE})
@@ -21,11 +21,36 @@ gaudi_add_module(SimG4Components
 
 include(CTest)
 gaudi_add_test(GeantFullSimHCal
-                WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-               FRAMEWORK tests/geant_fullsim_hcal.py)
-gaudi_add_test(GeantFullSimGdmlDetector
-                 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-               FRAMEWORK tests/geant_fullsim_gdml.py)
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+               FRAMEWORK tests/options/geant_fullsim_hcal.py)
+gaudi_add_test(GeantFullSimECal
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+               FRAMEWORK tests/options/geant_fullsim_ecal.py)
+gaudi_add_test(GeantFullSimGdml
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+               FRAMEWORK tests/options/geant_fullsim_gdml.py)
 gaudi_add_test(GeantFullSimMoreEvents
-                 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-               FRAMEWORK tests/geant_fullsim_moreEvents.py)
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               FRAMEWORK tests/options/geant_fullsim_moreEvents.py)
+gaudi_add_test(GeantFullSimMoreEventsCheckNumEvents
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               COMMAND python ./scripts/geant_fullsim_moreEvents_checkNumEvents.py
+               DEPENDS GeantFullSimMoreEvents)
+gaudi_add_test(GeantFullSimMoreEventsCheckNumParticles
+               ENVIRONMENT PYTHONPATH+=$ENV{PODIO}/python
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               COMMAND python ./scripts/geant_fullsim_moreEvents_checkNumParticles.py
+               DEPENDS GeantFullSimMoreEvents)
+gaudi_add_test(GeantFastSimSimpleSmearing
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               FRAMEWORK tests/options/geant_fastsim_simple.py)
+gaudi_add_test(GeantFastSimSimpleSmearingCheckSigma
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               COMMAND python ./scripts/geant_fastsim_simple_checkSigma.py
+               DEPENDS GeantFastSimSimpleSmearing)
+gaudi_add_test(GeantFastSimSimpleSmearingCheckNumParticles
+               ENVIRONMENT PYTHONPATH+=$ENV{PODIO}/python
+               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Sim/SimG4Components/tests/
+               COMMAND python ./scripts/geant_fastsim_checkNumParticles.py
+               DEPENDS GeantFastSimSimpleSmearing)
+
