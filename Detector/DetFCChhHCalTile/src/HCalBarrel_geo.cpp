@@ -36,67 +36,62 @@ static DD4hep::Geometry::Ref_t createHCal (
 
   // Make volume that envelopes the whole barrel; set material to air
   Dimension dimensions(xmlDet.dimensions());
-  DD4hep::Geometry::Tube envelopeShape(dimensions.rmin(), dimensions.rmax(), dimensions.dz());
+  xml_comp_t xEndPlate = xmlElement.child("end_plate");
+  double dZEndPlate = xEndPlate.thickness();
+  xml_comp_t xFacePlate = xmlElement.child("face_plate");
+  double dRhoFacePlate = xFacePlate.thickness();
+  double sensitiveBarrelRmin = dimensions.rmin() + dRhoFacePlate;
+  // Hard-coded assumption that we have two different sequences for the modules
+  std::vector<xml_comp_t> sequences = {xmlElement.child("sequence_a"), xmlElement.child("sequence_b")};
+  // NOTE: This assumes that both have the same dimensions!
+  Dimension moduleDimensions(sequences[0].dimensions());
+  double dzModule = moduleDimensions.dz();
+  // calculate the number of modules fitting in phi, Z and Rho
+  unsigned int numModulesPhi = moduleDimensions.phiBins();
+  unsigned int numModulesZ = static_cast<unsigned>(dimensions.dz() / dzModule);
+  unsigned int numModulesR = static_cast<unsigned>((dimensions.rmax() - sensitiveBarrelRmin) / moduleDimensions.dr());
+  lLog << MSG::DEBUG << "constructing " << numModulesPhi << " modules per ring in phi, "
+                     << numModulesZ << " rings in Z, "
+                     << numModulesR << " rings (layers) in Rho  = total of "
+                     << numModulesR*numModulesZ*numModulesPhi << " modules" << endmsg;
+
+  // Calculate correction along z based on the module size (can only have natural number of modules)
+  double dzDetector = numModulesZ * dzModule + dZEndPlate;
+  lLog << MSG::INFO << "correction of dz (negative = size reduced):" << dzDetector - dimensions.dz() << endmsg;
+
+  DD4hep::Geometry::Tube envelopeShape(dimensions.rmin(), dimensions.rmax(), dzDetector);
   Volume envelopeVolume(detName, envelopeShape, lcdd.air());
   // Invisibility seems to be broken in visualisation tags, have to hardcode that
   // envelopeVolume.setVisAttributes(lcdd, dimensions.visStr());
   envelopeVolume.setVisAttributes(lcdd.invisible());
 
   // set the sensitive detector type to the DD4hep calorimeter
-  sensDet.setType("Geant4Calorimeter");
+  sensDet.setType("SimpleCalorimeterSD");
 
   // Add structural support made of steel inside of HCal
-  xml_comp_t xFacePlate = xmlElement.child("face_plate");
-  double dRhoFacePlate = xFacePlate.thickness();
   DetElement facePlate("facePlate", 0);
-  DD4hep::Geometry::Tube facePlateShape(dimensions.rmin() - dRhoFacePlate, dimensions.rmin(), dimensions.dz());
+  DD4hep::Geometry::Tube facePlateShape(dimensions.rmin(), sensitiveBarrelRmin, dzDetector);
   Volume facePlateVol("facePlate", facePlateShape, lcdd.material(xFacePlate.materialStr()));
   facePlateVol.setVisAttributes(lcdd, xFacePlate.visStr());
   PlacedVolume placedFacePlate = envelopeVolume.placeVolume(facePlateVol);
-  placedFacePlate.addPhysVolID("facePlate", facePlate.id());
   facePlate.setPlacement(placedFacePlate);
 
 
   // Add structural support made of steel at both ends of HCal
-  xml_comp_t xEndPlate = xmlElement.child("end_plate");
-  double dZEndPlate = xEndPlate.thickness();
 
   DD4hep::Geometry::Tube endPlateShape(dimensions.rmin(), dimensions.rmax(), dZEndPlate);
   Volume endPlateVol("endPlate", endPlateShape, lcdd.material(xEndPlate.materialStr()));
   endPlateVol.setVisAttributes(lcdd, xEndPlate.visStr());
 
   DetElement endPlatePos("endPlate", 0);
-  DD4hep::Geometry::Position posOffset(0, 0, dimensions.dz());
+  DD4hep::Geometry::Position posOffset(0, 0, dzDetector -  dZEndPlate);
   PlacedVolume placedEndPlatePos = envelopeVolume.placeVolume(endPlateVol, posOffset);
-  placedEndPlatePos.addPhysVolID("endPlatePos", endPlatePos.id());
   endPlatePos.setPlacement(placedEndPlatePos);
 
   DetElement endPlateNeg("endPlate", 1);
-  DD4hep::Geometry::Position negOffset(0, 0, -dimensions.dz());
+  DD4hep::Geometry::Position negOffset(0, 0, -dzDetector +  dZEndPlate);
   PlacedVolume placedEndPlateNeg = envelopeVolume.placeVolume(endPlateVol, negOffset);
-  placedEndPlateNeg.addPhysVolID("endPlateNeg", endPlateNeg.id());
   endPlateNeg.setPlacement(placedEndPlateNeg);
-
-
-  // Hard-coded assumption that we have two different sequences for the modules
-  std::vector<xml_comp_t> sequences = {xmlElement.child("sequence_a"), xmlElement.child("sequence_b")};
-  // NOTE: This assumes that both have the same dimensions!
-  Dimension moduleDimensions(sequences[0].dimensions());
-  double dzModule = moduleDimensions.dz();
-  double barrelRmin = dimensions.rmin();
-
-  // calculate the number of modules fitting in phi, Z and Rho
-  unsigned int numModulesPhi = moduleDimensions.phiBins();
-  unsigned int numModulesZ = static_cast<unsigned>(dimensions.dz() / dzModule);
-  unsigned int numModulesR = static_cast<unsigned>((dimensions.rmax() - dimensions.rmin()) / moduleDimensions.dr());
-  lLog << MSG::DEBUG << "constructing " << numModulesPhi << " modules per ring in phi, "
-                     << numModulesZ << " rings in Z, "
-                     << numModulesR << " rings (layers) in Rho"
-                     << numModulesR*numModulesZ*numModulesPhi << " modules" << endmsg;
-
-  // Calculate correction along z based on the module size (can only have natural number of modules)
-  double dzDetector = numModulesZ * dzModule + dZEndPlate;
-  lLog << MSG::INFO << "correction of dz:" << dimensions.dz() - dzDetector << endmsg;
 
   // calculate the dimensions of one module:
   double dphi = 2 * dd4hep::pi / static_cast<double>(numModulesPhi);
@@ -105,10 +100,10 @@ static DD4hep::Geometry::Ref_t createHCal (
   double dy0 = moduleDimensions.dz();
   double dz0 = moduleDimensions.dr() / 2.;
 
-  double drWedge = (dimensions.rmax() - dimensions.rmin()) * 0.5;
+  double drWedge = cos(dphi / 2.) * (dimensions.rmax() - sensitiveBarrelRmin) * 0.5;
 
-  double dxWedge1 = tn * dimensions.rmin() - spacing;
-  double dxWedge2 = tn * dimensions.rmax() - spacing;
+  double dxWedge1 = tn * sensitiveBarrelRmin - spacing;
+  double dxWedge2 = tn * cos(dphi / 2.) * dimensions.rmax() - spacing;
 
   // First we construct one wedge with width of one module:
   Volume subWedgeVolume("subWedge", DD4hep::Geometry::Trapezoid(
@@ -116,12 +111,12 @@ static DD4hep::Geometry::Ref_t createHCal (
       ), lcdd.material("Air")
   );
   for (unsigned int idxLayer = 0; idxLayer < numModulesR; ++idxLayer) {
-    auto layerName = std::string("wedge") + DD4hep::XML::_toString(idxLayer, "layer%d");
+    auto layerName = DD4hep::XML::_toString(idxLayer, "layer%d");
     unsigned int sequenceIdx = idxLayer % 2;
     double rminLayer = idxLayer * moduleDimensions.dr();
-    double rmaxLayer = (idxLayer + 1) * moduleDimensions.dr();
-    double dx1 = tn * (rminLayer + barrelRmin) - spacing;
-    double dx2 = tn * (rmaxLayer + barrelRmin) - spacing;
+    double rmaxLayer = (idxLayer + 1) * cos(dphi / 2.) * moduleDimensions.dr();
+    double dx1 = tn * (rminLayer + sensitiveBarrelRmin) - spacing;
+    double dx2 = tn * cos(dphi / 2.) * (rmaxLayer + sensitiveBarrelRmin) - spacing;
     // -drWedge to place it in the middle of the wedge-volume
     double rMiddle = rminLayer + 0.5 * moduleDimensions.dr() - drWedge;
     Volume moduleVolume(layerName, DD4hep::Geometry::Trapezoid(
@@ -130,11 +125,10 @@ static DD4hep::Geometry::Ref_t createHCal (
     );
     moduleVolume.setVisAttributes(lcdd.invisible());
     unsigned int idxSubMod = 0;
-    // DetElement moduleDet(wedgeDet, layerName, idxLayer);
     double modCompZOffset = -moduleDimensions.dz();
     for (xml_coll_t xCompColl(sequences[sequenceIdx], _U(module_component)); xCompColl; ++xCompColl, ++idxSubMod) {
       xml_comp_t xComp = xCompColl;
-      std::string subModuleName = layerName+DD4hep::XML::_toString(idxSubMod, "module_component%d");
+      std::string subModuleName = DD4hep::XML::_toString(idxSubMod, "module_component%d");
       double dyComp = xComp.thickness();
       Volume modCompVol(subModuleName, DD4hep::Geometry::Trapezoid(
           dx1, dx2, dyComp, dyComp, dz0
@@ -145,7 +139,6 @@ static DD4hep::Geometry::Ref_t createHCal (
       }
       modCompVol.setVisAttributes(lcdd, xComp.visStr());
       // modCompVol.setVisAttributes(lcdd.invisible());
-      // DetElement modCompDet(wedgeDet, subModuleName, idxSubMod);
       DD4hep::Geometry::Position offset(0, modCompZOffset + dyComp + xComp.y_offset()*2, 0);
       PlacedVolume placedModCompVol = moduleVolume.placeVolume(modCompVol, offset);
       placedModCompVol.addPhysVolID("sub_module", idxSubMod);
@@ -167,7 +160,6 @@ static DD4hep::Geometry::Ref_t createHCal (
 
   for (unsigned int idxZRow = 0; idxZRow < numModulesZ; ++idxZRow) {
     double zOffset = -dzDetector + dZEndPlate * 2 + (2*idxZRow + 1) * dzModule;
-    auto wedgeRowName = DD4hep::XML::_toString(idxZRow, "row%d");
     DD4hep::Geometry::Position wedgeOffset(0, zOffset, 0);
     PlacedVolume placedRowVolume = wedgeVolume.placeVolume(subWedgeVolume, wedgeOffset);
     placedRowVolume.addPhysVolID("row", idxZRow);
@@ -184,8 +176,8 @@ static DD4hep::Geometry::Ref_t createHCal (
     // calculate position and rotation of this wedge;
     // first rotation due to default rotation of trapezoid
     double phi = 0.5 * dphi - idxPhi * dphi; // 0.5*dphi for middle of module
-    double yPosModule = (dimensions.rmin() + drWedge) * cos(phi);
-    double xPosModule = (dimensions.rmin() + drWedge) * sin(phi);
+    double yPosModule = (sensitiveBarrelRmin + drWedge) * cos(phi);
+    double xPosModule = (sensitiveBarrelRmin + drWedge) * sin(phi);
     DD4hep::Geometry::Position moduleOffset(xPosModule, yPosModule, 0);
     DD4hep::Geometry::Transform3D trans(
       DD4hep::Geometry::RotationX(-0.5*dd4hep::pi)*
